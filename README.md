@@ -30,6 +30,22 @@ the same modules will drive the Alpaca paper bot next.
 
 ## Findings log
 
+- **2026-08-09c** (research-driven experiments; sources in the repo history):
+  - **MR without tight stops (Alvarez) — REJECTED.** The best-evidenced forum
+    advice ("stops hurt mean reversion") failed our lab: 16.8% CAGR / 0.95
+    Sharpe vs incumbent 19.7% / 1.08, and only 2/6 walk-forward folds better.
+    Advice doesn't transfer automatically; the tight 2xATR stop stays.
+  - **Regime hysteresis (1% band) — NOT ADOPTED (neutral).** 19.5% / 1.07 /
+    -28.9% DD; wins 4/6 folds and softens drawdown but loses the full sample
+    marginally. Documented, benched, worth retesting later.
+  - **Kill switch recalibrated -20% → -35%.** Monte Carlo block-bootstrap
+    (10k paths) showed healthy runs of this system hit -25% median / -35% p90
+    drawdowns, so -20% fired on ordinary variance (3 halts in backtest). The
+    -3% daily stand-down remains the fast brake.
+  - **Walk-forward folds added to experiments.py** — changes must now win the
+    full sample AND a majority of ~2y folds before adoption (anti-overfit
+    guardrail; a full-sample win alone can be one lucky stretch).
+
 - **2026-08-09b** (universe expanded to S&P 500 + 4 ETFs, 506 symbols):
   - Slot ranking added: when entries outnumber free slots, each strategy's
     best-scored candidate wins in round-robin. This exposed and fixed a flaw —

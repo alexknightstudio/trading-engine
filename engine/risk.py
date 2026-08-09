@@ -11,7 +11,11 @@ class RiskConfig:
     max_position_notional: float = 0.20  # fraction of equity per position
     stop_atr_mult: float = 2.0
     daily_loss_limit: float = 0.03    # flatten + stand down after a -3% day
-    max_drawdown_halt: float = 0.20   # stop the whole system at -20% from peak
+    max_drawdown_halt: float = 0.35   # full-system stop. Calibrated by Monte
+                                      # Carlo (monte_carlo.py): healthy runs of
+                                      # this system hit -25% median / -35% p90,
+                                      # so -20% fired on normal variance. -35%
+                                      # = "actually broken", not a bad streak.
     halt_cooldown_days: int = 21      # live: human review; backtest: resume after
                                       # this many flat days with the peak reset
     slippage_bps: float = 5.0         # per side

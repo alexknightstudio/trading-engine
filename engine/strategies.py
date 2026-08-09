@@ -49,11 +49,15 @@ def momentum_donchian(bars: pd.DataFrame, regime: pd.Series,
 
 def mean_reversion_rsi2(bars: pd.DataFrame, regime: pd.Series,
                         buy_below: float = 10, sell_above: float = 90,
-                        require_ma200: bool = False) -> Signals:
+                        require_ma200: bool = False,
+                        tight_stop: bool = True) -> Signals:
     """RSI(2) pullback: buy deep dips in uptrends, short spikes in downtrends.
     In CHOP both sides are allowed at half size. Time stop of 7 bars.
     require_ma200: only buy dips in stocks above their own 200d SMA (avoids
-    catching falling knives in a broad universe)."""
+    catching falling knives in a broad universe).
+    tight_stop=False: Alvarez-style — a tight stop on mean reversion sells at
+    the point of maximum expected bounce. Size the trade as if the 2xATR stop
+    existed, but only place a wide 20%% disaster stop; exits do the work."""
     reg = regime.reindex(bars.index).fillna(CHOP)
     r2 = rsi(bars["close"], 2)
     ma200 = sma(bars["close"], 200)
@@ -71,7 +75,9 @@ def mean_reversion_rsi2(bars: pd.DataFrame, regime: pd.Series,
     f["exit_long"] = r2 > 60
     f["exit_short"] = r2 < 40
     f["size_scale"] = pd.Series(1.0, index=bars.index).where(reg != CHOP, 0.5)
-    f["stop_dist"] = atr(bars, 14) * 2.0
+    a2 = atr(bars, 14) * 2.0
+    f["size_dist"] = a2  # sizing always assumes the 2xATR risk
+    f["stop_dist"] = a2 if tight_stop else close * 0.20
     # deepest oversold/overbought wins the slot
     f["score_long"] = buy_below - r2
     f["score_short"] = r2 - sell_above

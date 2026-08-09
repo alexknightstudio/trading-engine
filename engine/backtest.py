@@ -66,6 +66,7 @@ class _Order:
     size_scale: float = 1.0
     stop_dist: float = 0.0
     score: float = 0.0
+    size_dist: float = 0.0  # risk distance used for sizing (defaults to stop_dist)
 
 
 class _Sym:
@@ -89,6 +90,7 @@ class _Sym:
                 "xs": f["exit_short"].fillna(False).to_numpy(dtype=bool),
                 "scale": f["size_scale"].to_numpy(),
                 "stopd": f["stop_dist"].to_numpy(),
+                "sized": (f["size_dist"] if "size_dist" in f else f["stop_dist"]).to_numpy(),
                 "scl": f["score_long"].to_numpy(),
                 "ssc": f["score_short"].to_numpy(),
             })
@@ -168,7 +170,8 @@ def run(bars: dict[str, pd.DataFrame], signals: dict[str, list[Signals]],
                 continue
             fill = o * (1 + slip) if od.side > 0 else o * (1 - slip)
             stop = fill - od.side * od.stop_dist
-            qty = position_size(prev_equity, fill, stop, cfg, od.size_scale)
+            size_ref = fill - od.side * (od.size_dist or od.stop_dist)
+            qty = position_size(prev_equity, fill, size_ref, cfg, od.size_scale)
             if qty > 0:
                 positions[od.symbol] = Position(
                     od.symbol, od.strategy, od.side * qty, fill, stop, day,
@@ -230,9 +233,11 @@ def run(bars: dict[str, pd.DataFrame], signals: dict[str, list[Signals]],
                 elif pos is None and stand_down == 0:
                     if sg["el"][i] and np.isfinite(sg["stopd"][i]):
                         queued.append(_Order(sym, sg["strategy"], +1, "",
-                                             sg["scale"][i], sg["stopd"][i], sg["scl"][i]))
+                                             sg["scale"][i], sg["stopd"][i], sg["scl"][i],
+                                             sg["sized"][i]))
                     elif sg["es"][i] and np.isfinite(sg["stopd"][i]):
                         queued.append(_Order(sym, sg["strategy"], -1, "",
-                                             sg["scale"][i], sg["stopd"][i], sg["ssc"][i]))
+                                             sg["scale"][i], sg["stopd"][i], sg["ssc"][i],
+                                             sg["sized"][i]))
 
     return Result(pd.Series(equity_arr, index=dates), trades, halts, standdown_events)
