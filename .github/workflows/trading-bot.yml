@@ -3,6 +3,9 @@
 # covered by picking times safely inside the window year-round):
 #   plan — evenings after the OPG window opens (~7pm ET): decide tomorrow's
 #          orders and submit them market-on-open
+#   news — pre-open (~9am ET): Claude reads overnight news; VETO-ONLY (may
+#          cancel pending entry orders, never creates trades). Skips politely
+#          if ANTHROPIC_API_KEY isn't set.
 #   arm  — mid-morning after the open: place GTC protective stops on fills
 # Each run commits state/ back to the repo — a public, auditable trade log.
 # Trades PAPER money only (paper_bot.py pins paper=True).
@@ -11,6 +14,7 @@ name: trading-bot
 on:
   schedule:
     - cron: '30 0 * * 2-6'   # plan: 00:30 UTC Tue-Sat = Mon-Fri 7:30/8:30pm ET
+    - cron: '0 13 * * 1-5'   # news: 13:00 UTC Mon-Fri = 8:00/9:00am ET (pre-open)
     - cron: '50 14 * * 1-5'  # arm:  14:50 UTC Mon-Fri = 9:50/10:50am ET
   workflow_dispatch:
     inputs:
@@ -39,12 +43,15 @@ jobs:
         env:
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ALPACA_ENV_FILE: /dev/null
         run: |
           if [ -n "${{ github.event.inputs.command }}" ]; then
             CMD="${{ github.event.inputs.command }}"
           elif [ "${{ github.event.schedule }}" = "30 0 * * 2-6" ]; then
             CMD=plan
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 1-5" ]; then
+            CMD=news
           else
             CMD=arm
           fi

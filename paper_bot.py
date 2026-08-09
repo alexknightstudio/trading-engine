@@ -5,6 +5,12 @@ Usage:
   paper_bot.py plan [--no-fetch]   evening run (after close / before 9:28 ET):
                                    refresh data, compute signals, submit
                                    market-on-open (OPG) orders for tomorrow
+  paper_bot.py news                pre-open run (~9:00 ET): read overnight news
+                                   via Claude; VETO-ONLY — may cancel pending
+                                   entry orders, never creates trades or touches
+                                   held positions. Every verdict is logged so
+                                   the news layer builds its own track record.
+                                   Skips gracefully without ANTHROPIC_API_KEY.
   paper_bot.py arm                 morning run (after 9:35 ET): place GTC stop
                                    orders for newly filled entries, reconcile
   paper_bot.py status              account + positions + state overview
@@ -95,6 +101,148 @@ def cmd_status():
     open_orders = trading.get_orders()
     for o in open_orders:
         print(f"  order: {o.side} {o.qty or o.notional} {o.symbol} {o.type} {o.time_in_force} [{o.status}]")
+
+
+def _fetch_alpaca_news(symbols: list[str], hours: int = 18) -> list[dict]:
+    """Overnight news from Alpaca's news API (works with paper keys)."""
+    import json as _json
+    import ssl
+    import urllib.parse
+    import urllib.request
+
+    import certifi
+    from datetime import timedelta
+
+    start = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    params = urllib.parse.urlencode({
+        "symbols": ",".join(symbols), "start": start, "limit": "50",
+        "include_content": "false", "sort": "desc",
+    })
+    req = urllib.request.Request(
+        f"https://data.alpaca.markets/v1beta1/news?{params}",
+        headers={
+            "APCA-API-KEY-ID": os.getenv("ALPACA_API_KEY_ID"),
+            "APCA-API-SECRET-KEY": os.getenv("ALPACA_API_SECRET_KEY"),
+        },
+    )
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=30, context=ctx) as r:
+        return _json.loads(r.read()).get("news", [])
+
+
+NEWS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "market_risk_off": {"type": "boolean"},
+        "market_note": {"type": "string"},
+        "verdicts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string"},
+                    "action": {"type": "string", "enum": ["OK", "VETO"]},
+                    "reason": {"type": "string"},
+                },
+                "required": ["symbol", "action", "reason"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["market_risk_off", "market_note", "verdicts"],
+    "additionalProperties": False,
+}
+
+
+def cmd_news():
+    """Pre-open news check. VETO-ONLY by design (research finding: an
+    unbacktestable layer must never create trades — it may only block pending
+    entries, and every verdict is logged to build an auditable track record)."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        load_dotenv(ENV_FILE)
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        log("no ANTHROPIC_API_KEY — news layer skipped (bot trades on signals alone)")
+        return
+
+    trading = clients()
+    st = load_state()
+    pending = list(st["pending"].keys())
+    held = list(st["positions"].keys())
+    if not pending:
+        log("no pending entries — nothing the news layer is allowed to act on")
+        return
+
+    news = _fetch_alpaca_news(sorted(set(pending + held + ["SPY"])))
+    log(f"pending={pending} held={held} news_items={len(news)}")
+    headlines = "\n".join(
+        f"- [{n.get('created_at', '')[:16]}] ({', '.join(n.get('symbols', []))}) "
+        f"{n.get('headline', '')} — {n.get('summary', '')[:200]}"
+        for n in news
+    ) or "(no overnight news found)"
+
+    import anthropic
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model="claude-opus-5",
+        max_tokens=16000,
+        system=(
+            "You are the pre-market news screen for an automated paper-trading "
+            "system. Your ONLY power is to VETO planned entry orders before the "
+            "open; you can never create trades or touch held positions. Veto a "
+            "symbol only for material adverse company-specific news: earnings "
+            "surprises or earnings due today, guidance cuts, SEC/DOJ "
+            "investigations, fraud allegations, M&A that gaps the price, "
+            "analyst-moving downgrades on the news itself. Set market_risk_off "
+            "true only for genuine macro shocks (surprise rate action, major "
+            "geopolitical escalation overnight, credit event) — not routine "
+            "volatility or scheduled data. Default to OK: the system's edge is "
+            "its signals; you are a narrow safety screen and false vetoes cost "
+            "real performance. Give one verdict per PENDING symbol."
+        ),
+        messages=[{
+            "role": "user",
+            "content": (
+                f"PENDING entry orders for today's open (the only symbols you may veto): {pending}\n"
+                f"HELD positions (context only, no action possible): {held}\n\n"
+                f"Overnight news:\n{headlines}"
+            ),
+        }],
+        output_config={"format": {"type": "json_schema", "schema": NEWS_SCHEMA}},
+    )
+    if response.stop_reason == "refusal":
+        log("news model declined; failing open (no vetoes)")
+        return
+    import json as _json
+    verdict = _json.loads(next(b.text for b in response.content if b.type == "text"))
+
+    NEWS_LOG = STATE_FILE.parent / "news_log.jsonl"
+    NEWS_LOG.parent.mkdir(exist_ok=True)
+    with open(NEWS_LOG, "a") as f:
+        f.write(_json.dumps({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "pending": pending, "held": held, "news_items": len(news),
+            **verdict,
+        }) + "\n")
+
+    vetoed = {v["symbol"] for v in verdict["verdicts"] if v["action"] == "VETO"}
+    if verdict["market_risk_off"]:
+        log(f"RISK-OFF: {verdict['market_note']} — vetoing all pending entries")
+        vetoed = set(pending)
+    if not vetoed:
+        log("news screen: all pending entries OK")
+        return
+
+    open_orders = {o.symbol: o for o in trading.get_orders()}
+    for sym in vetoed & set(pending):
+        reason = next((v["reason"] for v in verdict["verdicts"] if v["symbol"] == sym),
+                      verdict["market_note"])
+        if sym in open_orders:
+            trading.cancel_order_by_id(open_orders[sym].id)
+        del st["pending"][sym]
+        log(f"VETO {sym}: {reason}")
+        log_trade({"ts": datetime.now(timezone.utc).isoformat(), "action": "news-veto",
+                   "symbol": sym, "qty": "", "reason": reason.replace(",", ";")})
+    save_state(st)
 
 
 def cmd_rearm():
@@ -277,6 +425,8 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "plan":
         cmd_plan(no_fetch="--no-fetch" in sys.argv)
+    elif cmd == "news":
+        cmd_news()
     elif cmd == "arm":
         cmd_arm()
     elif cmd == "status":

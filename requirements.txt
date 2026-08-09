@@ -3,3 +3,4 @@ pandas
 certifi
 alpaca-py
 python-dotenv
+anthropic
