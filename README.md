@@ -76,6 +76,22 @@ the same modules will drive the Alpaca paper bot next.
   CHOP-regime entries also net losers (kept at half size; variant C showed
   cutting them entirely costs more than it saves).
 
+## Autonomy
+
+The bot runs itself via GitHub Actions (`.github/workflows/trading-bot.yml`) —
+no local machine needs to be on:
+
+- **plan** (Mon-Fri evenings ET): refresh data, compute signals, submit
+  market-on-open orders for the next session
+- **arm** (Mon-Fri ~10am ET): place GTC protective stops on filled entries
+- every run commits `state/` back to the repo — the trade log is public and
+  auditable by design
+
+Alpaca paper keys live in the repo's Actions secrets (`ALPACA_API_KEY_ID`,
+`ALPACA_API_SECRET_KEY`). Local runs still work; `git pull` first so local
+state matches the last cloud run, and remember `plan` is once-per-day
+idempotent (`--force` to override).
+
 ## Rules
 
 - Paper trading only until a multi-month track record earns a human decision.

@@ -158,6 +158,11 @@ def cmd_plan(no_fetch=False):
     if st["halted"]:
         log("HALTED — run `paper_bot.py rearm` after review to resume")
         return
+    # idempotency: a second plan run the same day would duplicate OPG orders
+    today_utc = datetime.now(timezone.utc).date().isoformat()
+    if st.get("last_plan_run") == today_utc and "--force" not in sys.argv:
+        log(f"plan already ran {today_utc}; skipping (use --force to override)")
+        return
 
     # ---- account-level risk checks against live equity ----
     equity = float(trading.get_account().equity)
@@ -185,7 +190,7 @@ def cmd_plan(no_fetch=False):
     if not no_fetch:
         log("refreshing data (~5 min for full universe)...")
         import fetch
-        for i, sym in enumerate(fetch.ETFS + open(UNIVERSE_FILE).read().split()):
+        for sym in dict.fromkeys(fetch.ETFS + UNIVERSE_FILE.read_text().split()):
             try:
                 fetch.fetch(sym)
             except Exception as e:
@@ -234,7 +239,7 @@ def cmd_plan(no_fetch=False):
     else:
         by_strat = {}
         for sym in universe:
-            if sym in held or sym in exits or sym not in bars:
+            if sym in held or sym in exits or sym in st["pending"] or sym not in bars:
                 continue
             for make in factories:
                 sig = make(bars[sym], regime)
@@ -263,6 +268,7 @@ def cmd_plan(no_fetch=False):
                                   "queued": str(today.date())}
             log(f"ENTRY queued for open: BUY {qty} {sym} (strategy={strategy}, score={score:.2f})")
 
+    st["last_plan_run"] = today_utc
     save_state(st)
     log("plan complete")
 

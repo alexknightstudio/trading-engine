@@ -1,9 +1,9 @@
 .venv/
-data/
+data/*
+!data/universe.txt
 __pycache__/
 *.pyc
 *.log
 *.env
 .DS_Store
 results/
-state/

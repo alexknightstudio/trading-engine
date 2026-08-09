@@ -1,0 +1,60 @@
+# The bot's heartbeat. Runs on GitHub's servers so no local machine needs to
+# be on. Two scheduled runs per trading day (UTC crons; both ET offsets are
+# covered by picking times safely inside the window year-round):
+#   plan — evenings after the OPG window opens (~7pm ET): decide tomorrow's
+#          orders and submit them market-on-open
+#   arm  — mid-morning after the open: place GTC protective stops on fills
+# Each run commits state/ back to the repo — a public, auditable trade log.
+# Trades PAPER money only (paper_bot.py pins paper=True).
+name: trading-bot
+
+on:
+  schedule:
+    - cron: '30 0 * * 2-6'   # plan: 00:30 UTC Tue-Sat = Mon-Fri 7:30/8:30pm ET
+    - cron: '50 14 * * 1-5'  # arm:  14:50 UTC Mon-Fri = 9:50/10:50am ET
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'paper_bot command (plan/arm/status)'
+        default: 'status'
+
+concurrency: trading-bot
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          ALPACA_ENV_FILE: /dev/null
+        run: |
+          if [ -n "${{ github.event.inputs.command }}" ]; then
+            CMD="${{ github.event.inputs.command }}"
+          elif [ "${{ github.event.schedule }}" = "30 0 * * 2-6" ]; then
+            CMD=plan
+          else
+            CMD=arm
+          fi
+          echo "running: $CMD"
+          python paper_bot.py "$CMD"
+
+      - name: Commit state
+        run: |
+          git config user.name "engine-bot"
+          git config user.email "actions@github.com"
+          git add state/ || true
+          git diff --cached --quiet || git commit -m "bot: state after scheduled run"
+          git push

@@ -1,0 +1,39 @@
+{
+  "positions": {},
+  "pending": {
+    "HPQ": {
+      "strategy": "momentum",
+      "stop_dist": 2.5978590743778804,
+      "queued": "2026-08-07"
+    },
+    "WEC": {
+      "strategy": "meanrev",
+      "stop_dist": 4.39860850811323,
+      "queued": "2026-08-07"
+    },
+    "COHR": {
+      "strategy": "momentum",
+      "stop_dist": 68.35740699619551,
+      "queued": "2026-08-07"
+    },
+    "ATO": {
+      "strategy": "meanrev",
+      "stop_dist": 6.188829229027276,
+      "queued": "2026-08-07"
+    },
+    "GEN": {
+      "strategy": "momentum",
+      "stop_dist": 1.9453962865104568,
+      "queued": "2026-08-07"
+    },
+    "SRE": {
+      "strategy": "meanrev",
+      "stop_dist": 3.8957303686369946,
+      "queued": "2026-08-07"
+    }
+  },
+  "equity_peak": 100000.0,
+  "last_equity": 100000.0,
+  "standdown": false,
+  "halted": false
+}
