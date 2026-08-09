@@ -13,8 +13,31 @@ HERE = Path(__file__).parent
 DATA = HERE / "data"
 DATA.mkdir(exist_ok=True)
 
-UNIVERSE = ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"]
+ETFS = ["SPY", "QQQ", "IWM", "DIA"]
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+
+
+def sp500_symbols() -> list[str]:
+    """Current S&P 500 constituents from Wikipedia. NOTE: using today's list
+    over historical backtests introduces survivorship bias (documented in README)."""
+    import re
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=30, context=SSL_CTX) as r:
+        html = r.read().decode("utf-8", errors="replace")
+    # NYSE rows link to nyse.com/quote/XNYS:MMM, Nasdaq rows to
+    # nasdaq.com/market-activity/stocks/aapl
+    syms = re.findall(r'quote/[A-Z]+:([A-Z.]{1,6})"', html)
+    syms += [s.upper() for s in re.findall(r'nasdaq\.com/market-activity/stocks/([a-zA-Z.]{1,6})', html)]
+    seen, out = set(), []
+    for s in syms:
+        s = s.replace(".", "-")  # BRK.B -> BRK-B (Yahoo convention)
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    if len(out) < 400:
+        raise RuntimeError(f"only parsed {len(out)} S&P symbols — page layout changed?")
+    return out
 
 
 def fetch(symbol: str) -> int:
@@ -54,8 +77,18 @@ def fetch(symbol: str) -> int:
 
 
 if __name__ == "__main__":
-    for sym in UNIVERSE:
-        n = fetch(sym)
-        print(f"{sym}: {n} bars")
-        time.sleep(0.5)
-    print("done.")
+    universe = ETFS + sp500_symbols()
+    print(f"universe: {len(universe)} symbols")
+    ok, failed = [], []
+    for i, sym in enumerate(universe):
+        try:
+            n = fetch(sym)
+            ok.append(sym)
+            if i % 25 == 0:
+                print(f"  {i}/{len(universe)} {sym}: {n} bars")
+        except Exception as e:
+            failed.append(sym)
+            print(f"  SKIP {sym}: {e}")
+        time.sleep(0.3)
+    (DATA / "universe.txt").write_text("\n".join(ok) + "\n")
+    print(f"done. fetched {len(ok)}, failed {len(failed)}: {failed}")

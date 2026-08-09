@@ -17,7 +17,11 @@ from engine.data import load_universe
 from engine.regime import classify
 from engine.strategies import mean_reversion_rsi2, momentum_donchian
 
-UNIVERSE = ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"]
+from pathlib import Path
+
+_UNIVERSE_FILE = Path(__file__).parent / "data" / "universe.txt"
+UNIVERSE = (_UNIVERSE_FILE.read_text().split() if _UNIVERSE_FILE.exists()
+            else ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"])
 INDEX = "SPY"
 START_EQUITY = 100_000
 
@@ -61,8 +65,11 @@ def main():
     print(stats.breakdown(res, lambda t: t.direction).to_string())
     print("\n--- by regime at entry ---")
     print(stats.breakdown(res, lambda t: t.entry_regime).to_string())
-    print("\n--- by symbol ---")
-    print(stats.breakdown(res, lambda t: t.symbol).to_string())
+    by_sym = stats.breakdown(res, lambda t: t.symbol)
+    print(f"\n--- by symbol (top 10 / bottom 10 of {len(by_sym)}) ---")
+    print(by_sym.head(10).to_string())
+    print("  ...")
+    print(by_sym.tail(10).to_string())
 
     print("\n--- regime days ---")
     print(regime.reindex(dates).value_counts().to_string())

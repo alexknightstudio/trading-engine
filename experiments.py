@@ -1,31 +1,32 @@
 """Variant experiments: quantify rule changes before adopting them.
 This is the manual version of what the evolution loop will do nightly.
+
+Current incumbent: momentum + mean-reversion, longs only (shorts lost -$81k
+over 10y in the 2026-08-09 experiment), CHOP at half size.
 """
+from pathlib import Path
+
 import pandas as pd
 
 from engine import stats
 from engine.backtest import run
 from engine.data import load_universe
-from engine.regime import DOWN, classify
-from engine.strategies import mean_reversion_rsi2, momentum_donchian
+from engine.regime import classify
+from engine.strategies import fib_pullback, mean_reversion_rsi2, momentum_donchian
 
-UNIVERSE = ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"]
+_UNIVERSE_FILE = Path(__file__).parent / "data" / "universe.txt"
+UNIVERSE = (_UNIVERSE_FILE.read_text().split() if _UNIVERSE_FILE.exists()
+            else ["SPY", "QQQ", "IWM", "DIA", "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"])
 START_EQUITY = 100_000
 
 
-def build_signals(bars, regime, no_shorts=False, no_chop=False, mr_shorts_only=False):
+def build_signals(bars, regime, factories, allow_shorts=False):
     out = {}
-    for sym in UNIVERSE:
-        sigs = [momentum_donchian(bars[sym], regime), mean_reversion_rsi2(bars[sym], regime)]
-        for sig in sigs:
-            f = sig.frame
-            if no_shorts:
-                f["entry_short"] = False
-            elif mr_shorts_only and sig.strategy == "momentum":
-                f["entry_short"] = False
-            if no_chop:
-                reg = regime.reindex(f.index)
-                f.loc[reg == "CHOP", ["entry_long", "entry_short"]] = False
+    for sym in bars:
+        sigs = [make(bars[sym], regime) for make in factories]
+        if not allow_shorts:
+            for sig in sigs:
+                sig.frame["entry_short"] = False
         out[sym] = sigs
     return out
 
@@ -35,16 +36,20 @@ def main():
     regime = classify(bars["SPY"])
     dates = bars["SPY"].index
 
+    mr_quality = lambda b, r: mean_reversion_rsi2(b, r, require_ma200=True)
     variants = {
-        "A baseline (long+short everywhere)": {},
-        "B no shorts (DOWN regime -> cash)": {"no_shorts": True},
-        "C no shorts, no CHOP entries": {"no_shorts": True, "no_chop": True},
-        "D shorts via mean-reversion only": {"mr_shorts_only": True},
+        "incumbent (momentum + meanrev)": [momentum_donchian, mean_reversion_rsi2],
+        "incumbent + fib pullback": [momentum_donchian, mean_reversion_rsi2, fib_pullback],
+        "fib pullback only": [fib_pullback],
+        "momentum only": [momentum_donchian],
+        "meanrev only": [mean_reversion_rsi2],
+        "mom + MR(>200sma)": [momentum_donchian, mr_quality],
+        "mom + MR(>200sma) + fib": [momentum_donchian, mr_quality, fib_pullback],
     }
 
     rows = []
-    for label, kw in variants.items():
-        res = run(bars, build_signals(bars, regime, **kw), dates, regime, START_EQUITY)
+    for label, factories in variants.items():
+        res = run(bars, build_signals(bars, regime, factories), dates, regime, START_EQUITY)
         s = stats.summarize(res, label)
         rows.append({
             "variant": label,
@@ -55,7 +60,7 @@ def main():
             "win%": round(s["win_rate"] * 100),
             "halts": len(s["halts"]),
         })
-    print(pd.DataFrame(rows).to_string(index=False))
+        print(pd.DataFrame(rows).to_string(index=False), "\n")
 
 
 if __name__ == "__main__":
