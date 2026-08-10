@@ -265,6 +265,7 @@ def cmd_brief():
     load_dotenv(ENV_FILE)
     to_addr = os.getenv("BRIEF_EMAIL")
     app_pw = os.getenv("GMAIL_APP_PASSWORD")
+    sender = os.getenv("GMAIL_USER") or to_addr  # SMTP login account; defaults to recipient
     if not to_addr or not app_pw:
         log("BRIEF_EMAIL / GMAIL_APP_PASSWORD not set — brief skipped")
         return
@@ -366,10 +367,10 @@ def cmd_brief():
 
     msg = MIMEText(body)
     msg["Subject"] = f"KnightTrader weekly: ${equity:,.0f} ({week_ret * 100:+.1f}%)"
-    msg["From"] = to_addr
+    msg["From"] = sender
     msg["To"] = to_addr
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(to_addr, app_pw)
+        smtp.login(sender, app_pw)
         smtp.send_message(msg)
     log(f"brief sent to {to_addr}: equity ${equity:,.0f}, week {week_ret * 100:+.2f}%")
 
