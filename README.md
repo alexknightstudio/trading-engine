@@ -30,6 +30,24 @@ the same modules will drive the Alpaca paper bot next.
 
 ## Findings log
 
+- **2026-08-09d** (owner-directed AI/EM tilt experiments):
+  - Universe expanded to 528 symbols (S&P 500 + ETFs + AI/semis/data-center
+    ADRs + emerging-market ETFs/ADRs, curated in `data/focus.txt`). Kept —
+    more opportunity, names earn slots on signal strength.
+  - **Focus-priority slot tilt — REJECTED.** Forcing focus names to the front
+    of the slot queue halved CAGR (17.4% → 8.5%): weak signals on focus names
+    (BABA, INTC, EM ETFs) crowd out strong signals elsewhere, while NVDA-type
+    winners get bought either way when their signals are strong. Raising risk
+    on top (1.5%/2%) only deepened drawdowns (-41%/-52%).
+  - **Focus-ONLY universe: 13.4%/0.76 at 1% risk; 20.9%/0.87/-42% at 1.5%.**
+    Not adopted (owner chose the incumbent after seeing the numbers).
+  - **"Tune until the backtest shows 30%" — REFUSED on principle.** No honest
+    configuration of this system reaches 30% CAGR; a backtest optimized to
+    hit a target number is curve-fitting and predicts nothing.
+  - Current official (528 symbols, incumbent config): **17.4% CAGR / 0.97
+    Sharpe / -30.6% maxDD**, worst year 2022 (-16.4%) vs SPY 15.4% / 0.89 /
+    -33.7% / -18.2%.
+
 - **2026-08-09c** (research-driven experiments; sources in the repo history):
   - **MR without tight stops (Alvarez) — REJECTED.** The best-evidenced forum
     advice ("stops hurt mean reversion") failed our lab: 16.8% CAGR / 0.95

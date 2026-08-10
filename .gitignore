@@ -1,6 +1,7 @@
 .venv/
 data/*
 !data/universe.txt
+!data/focus.txt
 __pycache__/
 *.pyc
 *.log

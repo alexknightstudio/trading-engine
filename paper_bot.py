@@ -403,6 +403,8 @@ def cmd_plan(no_fetch=False):
                 if row["entry_long"] and row["stop_dist"] > 0:
                     by_strat.setdefault(sig.strategy, []).append(
                         (row["score_long"], sym, row["stop_dist"], row["size_scale"], sig.strategy))
+        # NOTE: a focus-priority sort was tested 2026-08-09 and REJECTED — it
+        # halved backtest CAGR (see README findings). Plain score ranking stays.
         for lst in by_strat.values():
             lst.sort(reverse=True)
         slots = cfg.max_positions - (len(held) - len(exits)) - len(st["pending"])

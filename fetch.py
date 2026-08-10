@@ -77,7 +77,9 @@ def fetch(symbol: str) -> int:
 
 
 if __name__ == "__main__":
-    universe = ETFS + sp500_symbols()
+    focus_file = DATA / "focus.txt"
+    extras = focus_file.read_text().split() if focus_file.exists() else []
+    universe = list(dict.fromkeys(ETFS + sp500_symbols() + extras))
     print(f"universe: {len(universe)} symbols")
     ok, failed = [], []
     for i, sym in enumerate(universe):

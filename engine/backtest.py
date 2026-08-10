@@ -98,7 +98,8 @@ class _Sym:
 
 def run(bars: dict[str, pd.DataFrame], signals: dict[str, list[Signals]],
         dates: pd.DatetimeIndex, regime: pd.Series,
-        start_equity: float = 100_000, cfg: RiskConfig = RiskConfig()) -> Result:
+        start_equity: float = 100_000, cfg: RiskConfig = RiskConfig(),
+        focus: frozenset = frozenset()) -> Result:
     slip = cfg.slippage_bps / 10_000
     syms = {s: _Sym(bars[s], signals.get(s, []), dates) for s in bars}
     reg_arr = regime.reindex(dates).fillna("CHOP").to_numpy()
@@ -151,8 +152,9 @@ def run(bars: dict[str, pd.DataFrame], signals: dict[str, list[Signals]],
         for o in queued:
             if o.side != 0:
                 by_strat.setdefault(o.strategy, []).append(o)
+        # focus symbols outrank non-focus (owner directive), then score decides
         for lst in by_strat.values():
-            lst.sort(key=lambda o: o.score, reverse=True)
+            lst.sort(key=lambda o: (o.symbol in focus, o.score), reverse=True)
         entries = []
         while any(by_strat.values()):
             for lst in by_strat.values():

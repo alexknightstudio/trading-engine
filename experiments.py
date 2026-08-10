@@ -13,7 +13,9 @@ import pandas as pd
 from engine import stats
 from engine.backtest import run
 from engine.data import load_universe
+from engine.focus import load_focus
 from engine.regime import classify
+from engine.risk import RiskConfig
 from engine.strategies import fib_pullback, mean_reversion_rsi2, momentum_donchian
 
 _UNIVERSE_FILE = Path(__file__).parent / "data" / "universe.txt"
@@ -49,18 +51,24 @@ def main():
     regime_hyst = classify(bars["SPY"], band=0.01)
     dates = bars["SPY"].index
 
-    mr_nostop = lambda b, r: mean_reversion_rsi2(b, r, tight_stop=False)
+    focus = load_focus()
+    base = [momentum_donchian, mean_reversion_rsi2]
     variants = {
-        "incumbent (mom + MR, 2xATR stops)": ([momentum_donchian, mean_reversion_rsi2], regime_plain),
-        "MR no tight stop (Alvarez)":        ([momentum_donchian, mr_nostop], regime_plain),
-        "regime hysteresis 1% band":         ([momentum_donchian, mean_reversion_rsi2], regime_hyst),
-        "MR no stop + hysteresis":           ([momentum_donchian, mr_nostop], regime_hyst),
+        "incumbent, no tilt, 1% risk": (base, regime_plain, frozenset(), RiskConfig()),
+        "AI/EM tilt, 1% risk":         (base, regime_plain, focus, RiskConfig()),
+        "AI/EM tilt, 1.5% risk":       (base, regime_plain, focus, RiskConfig(risk_per_trade=0.015, max_position_notional=0.25)),
+        "AI/EM tilt, 2% risk":         (base, regime_plain, focus, RiskConfig(risk_per_trade=0.02, max_position_notional=0.30)),
+        "focus-ONLY universe, 1% risk":   (base, regime_plain, frozenset(), RiskConfig()),
+        "focus-ONLY universe, 1.5% risk": (base, regime_plain, frozenset(), RiskConfig(risk_per_trade=0.015, max_position_notional=0.25)),
     }
 
     rows = []
     folds = {}
-    for label, (factories, regime) in variants.items():
-        res = run(bars, build_signals(bars, regime, factories), dates, regime, START_EQUITY)
+    for label, (factories, regime, foc, cfg) in variants.items():
+        sig_bars = ({s: b for s, b in bars.items() if s in focus} if "focus-ONLY" in label
+                    else bars)
+        res = run(bars, build_signals(sig_bars, regime, factories), dates, regime, START_EQUITY,
+                  cfg=cfg, focus=foc)
         s = stats.summarize(res, label)
         fs = fold_sharpes(res.equity)
         folds[label] = fs
