@@ -11,11 +11,6 @@
       "stop_dist": 4.39860850811323,
       "queued": "2026-08-07"
     },
-    "COHR": {
-      "strategy": "momentum",
-      "stop_dist": 68.35740699619551,
-      "queued": "2026-08-07"
-    },
     "ATO": {
       "strategy": "meanrev",
       "stop_dist": 6.188829229027276,
