@@ -182,33 +182,39 @@ def cmd_news():
 
     import anthropic
     client = anthropic.Anthropic()
-    response = client.messages.create(
-        model="claude-opus-5",
-        max_tokens=16000,
-        system=(
-            "You are the pre-market news screen for an automated paper-trading "
-            "system. Your ONLY power is to VETO planned entry orders before the "
-            "open; you can never create trades or touch held positions. Veto a "
-            "symbol only for material adverse company-specific news: earnings "
-            "surprises or earnings due today, guidance cuts, SEC/DOJ "
-            "investigations, fraud allegations, M&A that gaps the price, "
-            "analyst-moving downgrades on the news itself. Set market_risk_off "
-            "true only for genuine macro shocks (surprise rate action, major "
-            "geopolitical escalation overnight, credit event) — not routine "
-            "volatility or scheduled data. Default to OK: the system's edge is "
-            "its signals; you are a narrow safety screen and false vetoes cost "
-            "real performance. Give one verdict per PENDING symbol."
-        ),
-        messages=[{
-            "role": "user",
-            "content": (
-                f"PENDING entry orders for today's open (the only symbols you may veto): {pending}\n"
-                f"HELD positions (context only, no action possible): {held}\n\n"
-                f"Overnight news:\n{headlines}"
+    try:
+        response = client.messages.create(
+            model="claude-opus-5",
+            max_tokens=16000,
+            system=(
+                "You are the pre-market news screen for an automated paper-trading "
+                "system. Your ONLY power is to VETO planned entry orders before the "
+                "open; you can never create trades or touch held positions. Veto a "
+                "symbol only for material adverse company-specific news: earnings "
+                "surprises or earnings due today, guidance cuts, SEC/DOJ "
+                "investigations, fraud allegations, M&A that gaps the price, "
+                "analyst-moving downgrades on the news itself. Set market_risk_off "
+                "true only for genuine macro shocks (surprise rate action, major "
+                "geopolitical escalation overnight, credit event) — not routine "
+                "volatility or scheduled data. Default to OK: the system's edge is "
+                "its signals; you are a narrow safety screen and false vetoes cost "
+                "real performance. Give one verdict per PENDING symbol."
             ),
-        }],
-        output_config={"format": {"type": "json_schema", "schema": NEWS_SCHEMA}},
-    )
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"PENDING entry orders for today's open (the only symbols you may veto): {pending}\n"
+                    f"HELD positions (context only, no action possible): {held}\n\n"
+                    f"Overnight news:\n{headlines}"
+                ),
+            }],
+            output_config={"format": {"type": "json_schema", "schema": NEWS_SCHEMA}},
+        )
+    except Exception as e:
+        # the news screen is optional: billing issues, outages, or API errors
+        # must never block the trading pipeline — fail open, keep the orders
+        log(f"news layer error ({e}); failing open — pending orders unchanged")
+        return
     if response.stop_reason == "refusal":
         log("news model declined; failing open (no vetoes)")
         return
