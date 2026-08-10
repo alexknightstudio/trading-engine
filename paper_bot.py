@@ -341,6 +341,20 @@ def cmd_brief():
     if st.get("standdown"):
         flags.append("standing down (daily loss limit)")
 
+    # --- evolution activity this week ---
+    evo_lines = []
+    evo_log = STATE_FILE.parent / "evolution_log.jsonl"
+    if evo_log.exists():
+        for line in evo_log.read_text().splitlines():
+            e = _json.loads(line)
+            if e.get("ts", "") >= week_ago.isoformat():
+                c = e.get("candidate") or {}
+                delta = (f" (candidate CAGR {c.get('cagr', 0) * 100:.1f}% vs incumbent "
+                         f"{e.get('incumbent', {}).get('cagr', 0) * 100:.1f}%)") if c else ""
+                evo_lines.append(f"  [{e['verdict']}] {e['name']}: {e['rationale'][:110]}{delta}")
+    if not evo_lines:
+        evo_lines = ["  (no evolution runs this week)"]
+
     body = "\n".join([
         f"KNIGHTTRADER WEEKLY BRIEF — {now.date().isoformat()}",
         "=" * 46,
@@ -358,6 +372,9 @@ def cmd_brief():
         "",
         "NEWS SCREEN",
         *news_lines,
+        "",
+        "EVOLUTION LAB (self-modification is live; adoptions auto-ship)",
+        *evo_lines,
         "",
         "-" * 46,
         "Paper money. Not financial advice. Full audit trail:",
@@ -425,9 +442,9 @@ def cmd_plan(no_fetch=False):
 
     sys.path.insert(0, str(HERE))
     from engine.data import load_universe
+    from engine.lineup import FACTORIES
     from engine.regime import classify
     from engine.risk import RiskConfig, position_size
-    from engine.strategies import mean_reversion_rsi2, momentum_donchian
 
     trading = clients()
     st = load_state()
@@ -483,7 +500,7 @@ def cmd_plan(no_fetch=False):
     log(f"last bar {today.date()}  regime={reg_today}")
 
     held = {p.symbol: p for p in trading.get_all_positions()}
-    factories = [momentum_donchian, mean_reversion_rsi2]
+    factories = FACTORIES
 
     # exits for held positions (signal or time stop)
     exits = []

@@ -20,6 +20,7 @@ on:
     - cron: '0 13 * * 1-5'   # news: 13:00 UTC Mon-Fri = 8:00/9:00am ET (pre-open)
     - cron: '50 14 * * 1-5'  # arm:  14:50 UTC Mon-Fri = 9:50/10:50am ET
     - cron: '0 21 * * 5'     # brief: 21:00 UTC Fri = 4/5pm ET (post-close)
+    - cron: '30 1 * * 2-6'   # evolve: 01:30 UTC Tue-Sat = Mon-Fri night ET
   workflow_dispatch:
     inputs:
       command:
@@ -61,16 +62,23 @@ jobs:
             CMD=news
           elif [ "${{ github.event.schedule }}" = "0 21 * * 5" ]; then
             CMD=brief
+          elif [ "${{ github.event.schedule }}" = "30 1 * * 2-6" ]; then
+            CMD=evolve
           else
             CMD=arm
           fi
           echo "running: $CMD"
-          python paper_bot.py "$CMD"
+          echo "CMD=$CMD" >> "$GITHUB_ENV"
+          if [ "$CMD" = "evolve" ]; then
+            python evolve.py
+          else
+            python paper_bot.py "$CMD"
+          fi
 
       - name: Commit state
         run: |
           git config user.name "engine-bot"
           git config user.email "actions@github.com"
-          git add state/ || true
-          git diff --cached --quiet || git commit -m "bot: state after scheduled run"
+          git add -A
+          git diff --cached --quiet || git commit -m "bot: state after $CMD run"
           git push

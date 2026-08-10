@@ -101,7 +101,15 @@ no local machine needs to be on:
 
 - **plan** (Mon-Fri evenings ET): refresh data, compute signals, submit
   market-on-open orders for the next session
+- **evolve** (Mon-Fri nights ET): the self-modification loop — Claude proposes
+  ONE strategy-code change (`evolve.py`); a deterministic arena adopts it only
+  if it beats the incumbent on the full 10y sample AND a majority of
+  walk-forward folds, with ≥200 trades and a 14-day adoption cooldown. Only
+  `engine/lineup.py` + `engine/evolved_*.py` are writable; `risk.py` never.
+  Every trial logged to `state/evolution_log.jsonl`.
+- **news** (Mon-Fri ~9am ET): Claude's veto-only pre-open news screen
 - **arm** (Mon-Fri ~10am ET): place GTC protective stops on filled entries
+- **brief** (Fri post-close): weekly performance email incl. evolution activity
 - every run commits `state/` back to the repo — the trade log is public and
   auditable by design
 
