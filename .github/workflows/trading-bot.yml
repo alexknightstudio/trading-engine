@@ -7,6 +7,9 @@
 #          cancel pending entry orders, never creates trades). Skips politely
 #          if ANTHROPIC_API_KEY isn't set.
 #   arm  — mid-morning after the open: place GTC protective stops on fills
+#   brief — Fridays post-close: weekly performance email (equity vs SPY,
+#          positions, fills, news vetoes). Skips politely without
+#          BRIEF_EMAIL / GMAIL_APP_PASSWORD secrets.
 # Each run commits state/ back to the repo — a public, auditable trade log.
 # Trades PAPER money only (paper_bot.py pins paper=True).
 name: trading-bot
@@ -16,6 +19,7 @@ on:
     - cron: '30 0 * * 2-6'   # plan: 00:30 UTC Tue-Sat = Mon-Fri 7:30/8:30pm ET
     - cron: '0 13 * * 1-5'   # news: 13:00 UTC Mon-Fri = 8:00/9:00am ET (pre-open)
     - cron: '50 14 * * 1-5'  # arm:  14:50 UTC Mon-Fri = 9:50/10:50am ET
+    - cron: '0 21 * * 5'     # brief: 21:00 UTC Fri = 4/5pm ET (post-close)
   workflow_dispatch:
     inputs:
       command:
@@ -44,6 +48,8 @@ jobs:
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRIEF_EMAIL: ${{ secrets.BRIEF_EMAIL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALPACA_ENV_FILE: /dev/null
         run: |
           if [ -n "${{ github.event.inputs.command }}" ]; then
@@ -52,6 +58,8 @@ jobs:
             CMD=plan
           elif [ "${{ github.event.schedule }}" = "0 13 * * 1-5" ]; then
             CMD=news
+          elif [ "${{ github.event.schedule }}" = "0 21 * * 5" ]; then
+            CMD=brief
           else
             CMD=arm
           fi

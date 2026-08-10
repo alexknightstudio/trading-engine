@@ -14,6 +14,11 @@ Usage:
   paper_bot.py arm                 morning run (after 9:35 ET): place GTC stop
                                    orders for newly filled entries, reconcile
   paper_bot.py status              account + positions + state overview
+  paper_bot.py brief               weekly performance email (Fridays post-close
+                                   in the cloud): equity vs SPY, positions,
+                                   the week's trades and news vetoes. Needs
+                                   BRIEF_EMAIL + GMAIL_APP_PASSWORD; skips
+                                   gracefully without them.
   paper_bot.py rearm               clear a drawdown halt after human review
 
 Risk rules mirror engine/risk.py and are enforced against live account equity:
@@ -251,6 +256,124 @@ def cmd_news():
     save_state(st)
 
 
+def cmd_brief():
+    """Weekly performance email. Read-only: reports, never trades."""
+    import smtplib
+    from datetime import timedelta
+    from email.mime.text import MIMEText
+
+    load_dotenv(ENV_FILE)
+    to_addr = os.getenv("BRIEF_EMAIL")
+    app_pw = os.getenv("GMAIL_APP_PASSWORD")
+    if not to_addr or not app_pw:
+        log("BRIEF_EMAIL / GMAIL_APP_PASSWORD not set — brief skipped")
+        return
+
+    from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
+    from alpaca.trading.enums import QueryOrderStatus
+
+    trading = clients()
+    st = load_state()
+    acct = trading.get_account()
+    equity = float(acct.equity)
+    now = datetime.now(timezone.utc)
+
+    # --- week-over-week equity ---
+    hist = trading.get_portfolio_history(GetPortfolioHistoryRequest(period="1M", timeframe="1D"))
+    eq_series = [e for e in (hist.equity or []) if e]
+    week_ago_eq = eq_series[-6] if len(eq_series) >= 6 else (eq_series[0] if eq_series else equity)
+    week_ret = equity / week_ago_eq - 1 if week_ago_eq else 0.0
+
+    # --- SPY same-week comparison (best effort) ---
+    spy_line = ""
+    try:
+        import fetch
+        fetch.fetch("SPY")
+        closes = [float(r.split(",")[4]) for r in
+                  (HERE / "data" / "spy_1d.csv").read_text().splitlines()[1:]]
+        if len(closes) >= 6:
+            spy_line = f"  (SPY same period: {(closes[-1] / closes[-6] - 1) * 100:+.2f}%)"
+    except Exception:
+        pass
+
+    # --- open positions ---
+    positions = trading.get_all_positions()
+    pos_lines = [
+        f"  {p.symbol:6s} {float(p.qty):>8.0f} @ ${float(p.avg_entry_price):,.2f}"
+        f"  now ${float(p.current_price):,.2f}  P/L ${float(p.unrealized_pl):+,.0f}"
+        f" ({float(p.unrealized_plpc) * 100:+.1f}%)  [{st['positions'].get(p.symbol, {}).get('strategy', '?')}]"
+        for p in positions
+    ] or ["  (none — in cash)"]
+
+    # --- orders filled this week ---
+    week_ago = now - timedelta(days=7)
+    orders = trading.get_orders(GetOrdersRequest(status=QueryOrderStatus.CLOSED,
+                                                 after=week_ago, limit=200))
+    fills = [o for o in orders if o.filled_at]
+    fill_lines = [
+        f"  {str(o.filled_at)[:10]}  {str(o.side).split('.')[-1]:4s} "
+        f"{float(o.filled_qty):>8.0f} {o.symbol:6s} @ ${float(o.filled_avg_price):,.2f}"
+        for o in sorted(fills, key=lambda o: str(o.filled_at))
+    ] or ["  (no fills this week)"]
+
+    # --- news screen verdicts this week ---
+    import json as _json
+    news_lines = []
+    news_log = STATE_FILE.parent / "news_log.jsonl"
+    if news_log.exists():
+        for line in news_log.read_text().splitlines():
+            entry = _json.loads(line)
+            if entry.get("ts", "") >= week_ago.isoformat():
+                vetoes = [v for v in entry.get("verdicts", []) if v["action"] == "VETO"]
+                for v in vetoes:
+                    news_lines.append(f"  VETO {v['symbol']}: {v['reason'][:120]}")
+                if not vetoes:
+                    news_lines.append(f"  {entry['ts'][:10]}: all {len(entry.get('pending', []))} pending entries cleared")
+    if not news_lines:
+        news_lines = ["  (no news-screen runs this week)"]
+
+    peak = st.get("equity_peak") or equity
+    dd = equity / peak - 1 if peak else 0.0
+    flags = []
+    if st.get("halted"):
+        flags.append("HALTED — needs manual rearm")
+    if st.get("standdown"):
+        flags.append("standing down (daily loss limit)")
+
+    body = "\n".join([
+        f"KNIGHTTRADER WEEKLY BRIEF — {now.date().isoformat()}",
+        "=" * 46,
+        "",
+        f"Equity:    ${equity:,.2f}",
+        f"Week:      {week_ret * 100:+.2f}%{spy_line}",
+        f"Drawdown:  {dd * 100:.1f}% from peak (${peak:,.0f})",
+        f"Status:    {'; '.join(flags) if flags else 'normal operation'}",
+        "",
+        f"OPEN POSITIONS ({len(positions)})",
+        *pos_lines,
+        "",
+        f"FILLS THIS WEEK ({len(fills)})",
+        *fill_lines,
+        "",
+        "NEWS SCREEN",
+        *news_lines,
+        "",
+        "-" * 46,
+        "Paper money. Not financial advice. Full audit trail:",
+        "https://github.com/alexknightstudio/trading-engine",
+        "https://alexknightprojects.com/bot/",
+    ])
+
+    msg = MIMEText(body)
+    msg["Subject"] = f"KnightTrader weekly: ${equity:,.0f} ({week_ret * 100:+.1f}%)"
+    msg["From"] = to_addr
+    msg["To"] = to_addr
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(to_addr, app_pw)
+        smtp.send_message(msg)
+    log(f"brief sent to {to_addr}: equity ${equity:,.0f}, week {week_ret * 100:+.2f}%")
+
+
 def cmd_rearm():
     st = load_state()
     st["halted"] = False
@@ -437,6 +560,8 @@ if __name__ == "__main__":
         cmd_news()
     elif cmd == "arm":
         cmd_arm()
+    elif cmd == "brief":
+        cmd_brief()
     elif cmd == "status":
         cmd_status()
     elif cmd == "rearm":
