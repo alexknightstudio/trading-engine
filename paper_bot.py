@@ -263,8 +263,9 @@ def cmd_brief():
     from email.mime.text import MIMEText
 
     load_dotenv(ENV_FILE)
-    to_addr = os.getenv("BRIEF_EMAIL")
-    app_pw = os.getenv("GMAIL_APP_PASSWORD")
+    to_addr = (os.getenv("BRIEF_EMAIL") or "").strip()
+    # Google displays app passwords with spaces; SMTP wants them without
+    app_pw = (os.getenv("GMAIL_APP_PASSWORD") or "").replace(" ", "").strip()
     sender = os.getenv("GMAIL_USER") or to_addr  # SMTP login account; defaults to recipient
     if not to_addr or not app_pw:
         log("BRIEF_EMAIL / GMAIL_APP_PASSWORD not set — brief skipped")
