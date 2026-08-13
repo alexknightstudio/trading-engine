@@ -51,24 +51,41 @@ def main():
     regime_hyst = classify(bars["SPY"], band=0.01)
     dates = bars["SPY"].index
 
-    focus = load_focus()
     base = [momentum_donchian, mean_reversion_rsi2]
+
+    # --- cycle-research wrappers (research/cycles.py, 98y of index data) ---
+    def seasonal(factory, months, scale):
+        """Scale entry size in the given calendar months."""
+        def make(b, r):
+            sig = factory(b, r)
+            mask = sig.frame.index.month.isin(months)
+            sig.frame.loc[mask, "size_scale"] = sig.frame.loc[mask, "size_scale"] * scale
+            return sig
+        return make
+
+    def mania_guard(regime, guard_close, mult):
+        """Index stretched > mult x its 200d MA = mania -> treat as CHOP.
+        Basis: Nasdaq >30% above 200dma -> median forward 12m return -35.6%."""
+        ma = guard_close.rolling(200).mean()
+        mania = (guard_close > mult * ma).reindex(regime.index).fillna(False)
+        return regime.where(~mania, "CHOP")
+
+    qqq = bars["QQQ"]["close"]
+    sep_half = [seasonal(f, {9}, 0.5) for f in base]
+    summer = [seasonal(f, {5, 6, 7, 8, 9, 10}, 0.75) for f in base]
     variants = {
-        "incumbent, no tilt, 1% risk": (base, regime_plain, frozenset(), RiskConfig()),
-        "AI/EM tilt, 1% risk":         (base, regime_plain, focus, RiskConfig()),
-        "AI/EM tilt, 1.5% risk":       (base, regime_plain, focus, RiskConfig(risk_per_trade=0.015, max_position_notional=0.25)),
-        "AI/EM tilt, 2% risk":         (base, regime_plain, focus, RiskConfig(risk_per_trade=0.02, max_position_notional=0.30)),
-        "focus-ONLY universe, 1% risk":   (base, regime_plain, frozenset(), RiskConfig()),
-        "focus-ONLY universe, 1.5% risk": (base, regime_plain, frozenset(), RiskConfig(risk_per_trade=0.015, max_position_notional=0.25)),
+        "incumbent":                    (base, regime_plain),
+        "September half-size":          (sep_half, regime_plain),
+        "May-Oct 0.75x size":           (summer, regime_plain),
+        "mania guard QQQ>1.30x ma200":  (base, mania_guard(regime_plain, qqq, 1.30)),
+        "mania guard QQQ>1.25x ma200":  (base, mania_guard(regime_plain, qqq, 1.25)),
+        "Sep half + mania 1.30":        (sep_half, mania_guard(regime_plain, qqq, 1.30)),
     }
 
     rows = []
     folds = {}
-    for label, (factories, regime, foc, cfg) in variants.items():
-        sig_bars = ({s: b for s, b in bars.items() if s in focus} if "focus-ONLY" in label
-                    else bars)
-        res = run(bars, build_signals(sig_bars, regime, factories), dates, regime, START_EQUITY,
-                  cfg=cfg, focus=foc)
+    for label, (factories, regime) in variants.items():
+        res = run(bars, build_signals(bars, regime, factories), dates, regime, START_EQUITY)
         s = stats.summarize(res, label)
         fs = fold_sharpes(res.equity)
         folds[label] = fs

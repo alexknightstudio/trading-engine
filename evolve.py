@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 from engine import stats
 from engine.backtest import run
 from engine.data import load_universe
-from engine.regime import classify
+from engine.regime import apply_mania_guard, classify
 
 EVO_LOG = HERE / "state" / "evolution_log.jsonl"
 LINEUP_FILE = HERE / "engine" / "lineup.py"
@@ -208,6 +208,8 @@ def main():
     universe = UNIVERSE_FILE.read_text().split()
     bars = load_universe(universe)
     regime = classify(bars["SPY"])
+    if "QQQ" in bars:
+        regime = apply_mania_guard(regime, bars["QQQ"]["close"])
     dates = bars["SPY"].index
 
     from engine.lineup import FACTORIES as INCUMBENT

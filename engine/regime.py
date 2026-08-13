@@ -14,6 +14,20 @@ from .indicators import sma
 UP, DOWN, CHOP = "UP", "DOWN", "CHOP"
 
 
+def apply_mania_guard(regime: pd.Series, guard_close: pd.Series,
+                      mult: float = 1.30) -> pd.Series:
+    """Bubble circuit-breaker (research/cycles.py, 55y of Nasdaq data):
+    when the growth index stretches more than `mult`x its own 200d MA, the
+    market is in blow-off territory — historically (ext > 30%) the median
+    FORWARD 12-month Nasdaq return was -35.6%, and that zone has only ever
+    meant 1999-2000-style mania. Demote such days to CHOP: half size,
+    mean-reversion only, no fresh breakout chasing. Never fired 2016-2026,
+    so it costs nothing in-sample; it exists for the next bubble top."""
+    ma = guard_close.rolling(200).mean()
+    mania = (guard_close > mult * ma).reindex(regime.index).fillna(False)
+    return regime.where(~mania, CHOP)
+
+
 def classify(index_bars: pd.DataFrame, slope_days: int = 10,
              band: float = 0.0) -> pd.Series:
     """band > 0 adds hysteresis: once in a regime, stay there until price

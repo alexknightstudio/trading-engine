@@ -444,7 +444,7 @@ def cmd_plan(no_fetch=False):
     sys.path.insert(0, str(HERE))
     from engine.data import load_universe
     from engine.lineup import FACTORIES
-    from engine.regime import classify
+    from engine.regime import apply_mania_guard, classify
     from engine.risk import RiskConfig, position_size
 
     trading = clients()
@@ -496,9 +496,12 @@ def cmd_plan(no_fetch=False):
     universe = UNIVERSE_FILE.read_text().split()
     bars = load_universe(universe)
     regime = classify(bars[INDEX])
+    regime = apply_mania_guard(regime, bars["QQQ"]["close"])
     today = bars[INDEX].index[-1]
     reg_today = regime.iloc[-1]
-    log(f"last bar {today.date()}  regime={reg_today}")
+    qqq = bars["QQQ"]["close"]
+    ext = qqq.iloc[-1] / qqq.rolling(200).mean().iloc[-1] - 1
+    log(f"last bar {today.date()}  regime={reg_today}  QQQ ext={ext * 100:+.1f}% (mania at +30%)")
 
     held = {p.symbol: p for p in trading.get_all_positions()}
     factories = FACTORIES

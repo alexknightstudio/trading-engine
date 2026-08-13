@@ -30,6 +30,26 @@ the same modules will drive the Alpaca paper bot next.
 
 ## Findings log
 
+- **2026-08-10** (century-scale cycle research, `research/cycles.py`, S&P 1927+
+  / Nasdaq 1971+):
+  - September is the only reliably negative month across 98y AND the last 30y;
+    Halloween effect (Nov-Apr ≈ 2x May-Oct) persists. **But seasonal sizing
+    REJECTED by the arena**: Sep half-size cost 2.3 CAGR pts on 2016-26
+    (3/6 folds), May-Oct 0.75x cost 6 pts — the regime engine and stops
+    already absorb calendar weakness in this system. Do not re-propose
+    calendar-based sizing without new evidence.
+  - Bear markets: ~every 8y, avg -39%, avg 329 bdays peak→trough (2020: 23
+    days — modern crashes outrun a 200d filter; the -3% daily brake is the
+    fast defense).
+  - **Bubble signature → MANIA GUARD ADOPTED** (`regime.apply_mania_guard`):
+    Nasdaq >30% above its 200d MA ⇒ median forward-12m return -35.6%
+    (p10 -59.5%); that zone has only ever meant 1999-2000. Guard demotes
+    regime to CHOP when QQQ ext > +30%. Never fired 2016-26 (zero in-sample
+    cost — arena-neutral); adopted as owner-directed bubble insurance under
+    the standing "assume AI is the next bubble" directive.
+  - Presidential cycle (pre-election year strongest, 13.2%/yr) noted; n=25,
+    too weak to act on.
+
 - **2026-08-09d** (owner-directed AI/EM tilt experiments):
   - Universe expanded to 528 symbols (S&P 500 + ETFs + AI/semis/data-center
     ADRs + emerging-market ETFs/ADRs, curated in `data/focus.txt`). Kept —

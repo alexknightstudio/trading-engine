@@ -34,6 +34,9 @@ def main():
 
     bars = load_universe(UNIVERSE)
     regime = classify(bars[INDEX])
+    if "QQQ" in bars:
+        from engine.regime import apply_mania_guard
+        regime = apply_mania_guard(regime, bars["QQQ"]["close"])
     dates = bars[INDEX].index
     if start:
         dates = dates[dates >= start]
