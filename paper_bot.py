@@ -356,6 +356,27 @@ def cmd_brief():
     if not evo_lines:
         evo_lines = ["  (no evolution runs this week)"]
 
+    # --- KalshiKnight (prediction-market bot) ---
+    kalshi_lines = []
+    try:
+        sys.path.insert(0, str(HERE / "kalshi"))
+        import kalshi_bot as kb
+        kk = kb.Kalshi()
+        k_bal = kk.balance()
+        k_pos = kk.positions()
+        k_exp = sum(abs(float(p.get("market_exposure_dollars") or 0)) for p in k_pos)
+        kalshi_lines.append(f"  balance ${k_bal:,.2f} | {len(k_pos)} positions, ${k_exp:,.2f} at risk")
+        for p in k_pos[:12]:
+            kalshi_lines.append(f"  {p['ticker'][:40]:40s} {p['position_fp']:>8} contracts")
+        k_trades = HERE / "kalshi" / "trades.csv"
+        if k_trades.exists():
+            import csv as _csv
+            week_rows = [r for r in _csv.DictReader(open(k_trades))
+                         if r.get("ts", "") >= week_ago.isoformat()]
+            kalshi_lines.append(f"  bets placed this week: {len(week_rows)}")
+    except Exception as e:
+        kalshi_lines = [f"  (kalshi status unavailable: {e})"]
+
     body = "\n".join([
         f"KNIGHTTRADER WEEKLY BRIEF — {now.date().isoformat()}",
         "=" * 46,
@@ -376,6 +397,9 @@ def cmd_brief():
         "",
         "EVOLUTION LAB (self-modification is live; adoptions auto-ship)",
         *evo_lines,
+        "",
+        "KALSHIKNIGHT (prediction markets, demo money)",
+        *kalshi_lines,
         "",
         "-" * 46,
         "Paper money. Not financial advice. Full audit trail:",

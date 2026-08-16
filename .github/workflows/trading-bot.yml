@@ -21,6 +21,7 @@ on:
     - cron: '50 14 * * 1-5'  # arm:  14:50 UTC Mon-Fri = 9:50/10:50am ET
     - cron: '0 21 * * 5'     # brief: 21:00 UTC Fri = 4/5pm ET (post-close)
     - cron: '30 1 * * 2-6'   # evolve: 01:30 UTC Tue-Sat = Mon-Fri night ET
+    - cron: '0 15 * * *'     # kalshi: 15:00 UTC daily — prediction-market cycle
   workflow_dispatch:
     inputs:
       command:
@@ -52,6 +53,7 @@ jobs:
           BRIEF_EMAIL: ${{ secrets.BRIEF_EMAIL }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          KALSHI_PRIVATE_KEY: ${{ secrets.KALSHI_PRIVATE_KEY }}
           ALPACA_ENV_FILE: /dev/null
         run: |
           if [ -n "${{ github.event.inputs.command }}" ]; then
@@ -64,6 +66,8 @@ jobs:
             CMD=brief
           elif [ "${{ github.event.schedule }}" = "30 1 * * 2-6" ]; then
             CMD=evolve
+          elif [ "${{ github.event.schedule }}" = "0 15 * * *" ]; then
+            CMD=kalshi
           else
             CMD=arm
           fi
@@ -71,6 +75,8 @@ jobs:
           echo "CMD=$CMD" >> "$GITHUB_ENV"
           if [ "$CMD" = "evolve" ]; then
             python evolve.py
+          elif [ "$CMD" = "kalshi" ]; then
+            cd kalshi && python kalshi_bot.py trade
           else
             python paper_bot.py "$CMD"
           fi
