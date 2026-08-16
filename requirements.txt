@@ -4,3 +4,4 @@ certifi
 alpaca-py
 python-dotenv
 anthropic
+cryptography
