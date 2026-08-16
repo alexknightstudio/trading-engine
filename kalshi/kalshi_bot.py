@@ -100,8 +100,10 @@ class Kalshi:
         return out
 
     def buy(self, ticker, side, count, price_dollars):
-        """V2 orders: side is expressed on the YES leg — buying YES is a
-        'bid'; buying NO is an 'ask' (selling YES) at 1 - no_price."""
+        """MAKER order (research finding: takers averaged -31.5%, makers
+        -9.6%, makers above 50c +2.6% — and maker fees are 75% lower).
+        Posts GTC inside the spread with post_only, never lifting the ask.
+        V2 side is on the YES leg: buy YES = bid; buy NO = ask at 1 - price."""
         if side == "yes":
             v2_side, px = "bid", price_dollars
         else:
@@ -112,10 +114,17 @@ class Kalshi:
             "side": v2_side,
             "count": f"{int(count)}.00",
             "price": f"{px:.4f}",
-            "time_in_force": "immediate_or_cancel",  # take the offer or skip
-            "self_trade_prevention_type": "taker_at_cross",
+            "time_in_force": "good_till_canceled",
+            "post_only": True,  # reject rather than cross — maker or nothing
+            "self_trade_prevention_type": "maker",
         }
         return self._req("POST", "/portfolio/events/orders", body)
+
+    def resting_orders(self):
+        return self._req("GET", "/portfolio/orders?status=resting&limit=200").get("orders", [])
+
+    def cancel(self, order_id):
+        return self._req("DELETE", f"/portfolio/events/orders/{order_id}")
 
 
 def series_of(ticker):
@@ -145,6 +154,14 @@ def cmd_status(k):
 
 
 def cmd_trade(k):
+    # refresh quotes daily: cancel yesterday's unfilled maker orders first
+    for o in k.resting_orders():
+        try:
+            k.cancel(o["order_id"])
+            log(f"  canceled stale order {o['order_id'][:8]} on {o.get('ticker')}")
+        except Exception as e:
+            log(f"  cancel failed {o.get('ticker')}: {e}")
+
     bal = k.balance()
     pos = k.positions()
     deployed = sum(abs(float(p.get("market_exposure_dollars") or 0)) for p in pos)
@@ -206,20 +223,23 @@ def cmd_trade(k):
     placed = 0
     for o in picks:
         t = o["ticker"]
+        # maker price: join or improve the bid, never cross the ask
+        px = round(min(o["ask"] - 0.01, o["bid"] + 0.01), 2)
+        px = max(px, o["bid"], 0.01)
         try:
-            r = k.buy(t, o["side"].lower(), o["count"], o["ask"])
+            r = k.buy(t, o["side"].lower(), o["count"], px)
             status = r.get("order", {}).get("status", "?")
         except Exception as e:
             log(f"  order failed {t}: {e}")
             continue
-        cost = o["count"] * o["ask"]
+        cost = o["count"] * px
         placed += 1
-        log(f"  BUY {o['count']} x {t} {o['side']} @ ${o['ask']:.2f} "
-            f"(${cost:,.2f}, ann {o['ann_yield'] * 100:.0f}%) [{status}]")
+        log(f"  POST {o['count']} x {t} {o['side']} @ ${px:.2f} maker "
+            f"(ask was ${o['ask']:.2f}, ann {o['ann_yield'] * 100:.0f}%) [{status}]")
         log_trade([datetime.now(timezone.utc).isoformat(), t, o["side"], o["count"],
-                   o["ask"], round(cost, 2), o["net_if_win"], round(o["ann_yield"], 3),
+                   px, round(cost, 2), o["net_if_win"], round(o["ann_yield"], 3),
                    o["title"]])
-    log(f"placed {placed} new positions")
+    log(f"posted {placed} maker orders (fills come to us or don't — unfilled beats overpaying)")
 
 
 if __name__ == "__main__":

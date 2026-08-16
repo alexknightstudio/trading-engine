@@ -26,11 +26,17 @@ BASE = os.environ.get("KALSHI_MARKETS_BASE",
 CTX = ssl.create_default_context(cafile=certifi.where())
 UA = {"User-Agent": "Mozilla/5.0"}
 
-MIN_PRICE, MAX_PRICE = 0.90, 0.985   # the favorite zone (above .985 fees eat it)
+MIN_PRICE, MAX_PRICE = 0.90, 0.97    # 97c cap: above it one loss erases 50-100
+                                     # wins (GWU study / wipe-ratio math)
 MAX_DAYS = 30                        # capital lockup limit
 MIN_ACTIVITY = 100                   # open interest or lifetime volume (contracts)
 MIN_ASK_SIZE = 50                    # contracts actually offered at the ask
 MAX_SPREAD = 0.03                    # a real two-sided market
+MIN_NET = 0.015                      # >=1.5c post-fee edge floor — blocks the
+                                     # annualized-yield trap of short-dated 98c
+# price-path markets (crypto/index levels) gap through favorites — excluded
+# per GWU sample design + practitioner postmortems
+PRICE_PATH = ("BTC", "ETH", "SOL", "XRP", "DOGE", "CRYPTO", "INX", "NASDAQ", "SPX")
 
 
 def fetch_all(max_pages=200):
@@ -62,8 +68,11 @@ def scan():
     rows = []
     all_m = fetch_all()
     for m in all_m:
-        if m.get("market_type") != "binary" or "MVE" in (m.get("ticker") or "").upper():
+        tk = (m.get("ticker") or "").upper()
+        if m.get("market_type") != "binary" or "MVE" in tk:
             continue  # skip parlays/multi-leg
+        if any(p in tk for p in PRICE_PATH):
+            continue  # skip price-path markets
         try:
             close = datetime.fromisoformat(m["close_time"].replace("Z", "+00:00"))
         except Exception:
@@ -87,11 +96,11 @@ def scan():
             if not (MIN_PRICE <= ask <= MAX_PRICE):
                 continue
             net = (1 - ask) - fee(ask)          # profit per contract if it pays
-            if net <= 0:
+            if net < MIN_NET:
                 continue
             ann = (net / ask) * (365 / max(days, 0.25))
             rows.append({
-                "ticker": m["ticker"], "side": side.upper(), "ask": ask,
+                "ticker": m["ticker"], "side": side.upper(), "ask": ask, "bid": bid,
                 "days": round(days, 1), "net_if_win": round(net, 3),
                 "ann_yield": ann, "activity": int(activity),
                 "title": (m.get("title") or m.get("yes_sub_title") or "")[:64],
