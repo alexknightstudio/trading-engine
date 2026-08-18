@@ -37,23 +37,7 @@
       "stop_order_id": "e32d3a83-65b6-4619-8644-5f081c8adcde"
     }
   },
-  "pending": {
-    "IR": {
-      "strategy": "meanrev",
-      "stop_dist": 5.1798843936732695,
-      "queued": "2026-08-17"
-    },
-    "SNDK": {
-      "strategy": "momentum",
-      "stop_dist": 338.5536737452709,
-      "queued": "2026-08-17"
-    },
-    "VLO": {
-      "strategy": "slowtrend",
-      "stop_dist": 34.42868796703293,
-      "queued": "2026-08-17"
-    }
-  },
+  "pending": {},
   "equity_peak": 100000.0,
   "last_equity": 99202.25,
   "standdown": false,
