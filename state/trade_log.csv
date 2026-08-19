@@ -6,3 +6,4 @@ ts,action,symbol,qty,reason
 2026-08-17T15:02:57.073676+00:00,entry,STX,5,momentum
 2026-08-17T15:02:57.138134+00:00,entry,STT,103,momentum
 2026-08-17T15:02:57.138288+00:00,exit,SE,,stop-or-signal
+2026-08-19T15:13:38.410928+00:00,exit,STX,,stop-or-signal
