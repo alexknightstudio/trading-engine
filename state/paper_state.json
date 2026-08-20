@@ -26,20 +26,18 @@
       "stop": 184.74,
       "bars_held": 3,
       "stop_order_id": "e32d3a83-65b6-4619-8644-5f081c8adcde"
-    }
-  },
-  "pending": {
+    },
     "ITW": {
       "strategy": "meanrev",
       "stop_dist": 11.922381499140593,
-      "queued": "2026-08-19"
-    },
-    "AVGO": {
-      "strategy": "meanrev",
-      "stop_dist": 32.85330470075528,
-      "queued": "2026-08-19"
+      "queued": "2026-08-19",
+      "entry_price": 284.95,
+      "stop": 273.03,
+      "bars_held": 0,
+      "stop_order_id": "ec7751ef-180b-4f9f-837c-28a41abf4ab8"
     }
   },
+  "pending": {},
   "equity_peak": 100000.0,
   "last_equity": 97865.13,
   "standdown": false,
