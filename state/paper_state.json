@@ -34,11 +34,6 @@
       "stop_dist": 11.922381499140593,
       "queued": "2026-08-19"
     },
-    "MRNA": {
-      "strategy": "slowtrend",
-      "stop_dist": 34.50495452661411,
-      "queued": "2026-08-19"
-    },
     "AVGO": {
       "strategy": "meanrev",
       "stop_dist": 32.85330470075528,
