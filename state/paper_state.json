@@ -6,7 +6,7 @@
       "queued": "2026-08-07",
       "entry_price": 170.05,
       "stop": 163.86,
-      "bars_held": 6,
+      "bars_held": 7,
       "stop_order_id": "25b0d9f0-2344-4485-bfce-4ce55fb95b89"
     },
     "CNP": {
@@ -15,7 +15,7 @@
       "queued": "2026-08-10",
       "entry_price": 40.1,
       "stop": 38.01,
-      "bars_held": 5,
+      "bars_held": 6,
       "stop_order_id": "6718a07b-c999-4b12-9057-7fe4aba321f9"
     },
     "STT": {
@@ -33,14 +33,30 @@
       "queued": "2026-08-19",
       "entry_price": 284.95,
       "stop": 273.03,
-      "bars_held": 0,
+      "bars_held": 1,
       "stop_order_id": "ec7751ef-180b-4f9f-837c-28a41abf4ab8"
     }
   },
-  "pending": {},
+  "pending": {
+    "LUV": {
+      "strategy": "meanrev",
+      "stop_dist": 2.9823232201872645,
+      "queued": "2026-08-20"
+    },
+    "MRVL": {
+      "strategy": "momentum",
+      "stop_dist": 36.554388268584084,
+      "queued": "2026-08-20"
+    },
+    "NEM": {
+      "strategy": "slowtrend",
+      "stop_dist": 13.685759809336446,
+      "queued": "2026-08-20"
+    }
+  },
   "equity_peak": 100000.0,
-  "last_equity": 97865.13,
+  "last_equity": 97041.06,
   "standdown": false,
   "halted": false,
-  "last_plan_run": "2026-08-20"
+  "last_plan_run": "2026-08-21"
 }
